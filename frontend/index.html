@@ -1,33 +1,527 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
   <title>Currency Converter</title>
 
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+  <main class="app">
 
-  <h1>Währungsumrechner</h1>
+    <!-- HEADER -->
+    <header class="app-header">
+      <button class="menu-btn" aria-label="Menü öffnen">☰</button>
 
-  <input type="number" id="amount" placeholder="Betrag eingeben">
-<input type="number" id="amount" placeholder="EURO ">
-   <input type="number" id="amount" placeholder="Test">
-  <select id="fromCurrency">
-    <option value="EUR">Euro</option>
-    <option value="USD">US-Dollar</option>
-  </select>
+      <div class="brand">
+        <div class="brand-logo">💱</div>
+        <h1 id="appTitle">CURRENCY CONVERTER</h1>
+      </div>
 
-  <select id="toCurrency">
-    <option value="USD">US-Dollar</option>
-    <option value="EUR">Euro</option>
-  </select>
+      <div class="profile-avatar">👤</div>
+    </header>
 
-  <button id="convertBtn">Umrechnen</button>
+    <!-- SCREEN 1: KONVERTER -->
+    <section class="screen active" id="converterScreen">
+      <div class="converter-display">
 
-  <p id="result"></p>
+        <div class="currency-row">
+          <div class="currency-select-box">
+            <label id="fromLabel" for="fromCurrency">Von</label>
+            <select id="fromCurrency">
+              <option value="EUR">EUR - Euro</option>
+              <option value="USD">USD - US-Dollar</option>
+              <option value="GBP">GBP - Britisches Pfund</option>
+              <option value="CHF">CHF - Schweizer Franken</option>
+              <option value="TRY">TRY - Türkische Lira</option>
+              <option value="INR">INR - Indische Rupie</option>
+              <option value="JPY">JPY - Japanischer Yen</option>
+              <option value="CNY">CNY - Chinesischer Yuan</option>
+              <option value="AUD">AUD - Australischer Dollar</option>
+              <option value="CAD">CAD - Kanadischer Dollar</option>
+              <option value="SEK">SEK - Schwedische Krone</option>
+              <option value="NOK">NOK - Norwegische Krone</option>
+              <option value="DKK">DKK - Dänische Krone</option>
+              <option value="PLN">PLN - Polnischer Złoty</option>
+              <option value="CZK">CZK - Tschechische Krone</option>
+              <option value="HUF">HUF - Ungarischer Forint</option>
+              <option value="RON">RON - Rumänischer Leu</option>
+              <option value="BGN">BGN - Bulgarischer Lew</option>
+              <option value="AED">AED - VAE-Dirham</option>
+              <option value="SAR">SAR - Saudi-Riyal</option>
+              <option value="QAR">QAR - Katar-Riyal</option>
+              <option value="KWD">KWD - Kuwait-Dinar</option>
+              <option value="BRL">BRL - Brasilianischer Real</option>
+              <option value="MXN">MXN - Mexikanischer Peso</option>
+              <option value="ZAR">ZAR - Südafrikanischer Rand</option>
+            </select>
+          </div>
 
-  <script src="js/script.js"></script>
+          <div class="amount-box">
+            <p id="fromCurrencyCode">EUR</p>
+            <h2 id="fromAmount">1.000</h2>
+          </div>
+        </div>
+
+        <button class="swap-btn" id="swapBtn">⇅</button>
+
+        <div class="currency-row">
+          <div class="currency-select-box">
+            <label id="toLabel" for="toCurrency">Nach</label>
+            <select id="toCurrency">
+              <option value="USD">USD - US-Dollar</option>
+              <option value="EUR">EUR - Euro</option>
+              <option value="GBP">GBP - Britisches Pfund</option>
+              <option value="CHF">CHF - Schweizer Franken</option>
+              <option value="TRY">TRY - Türkische Lira</option>
+              <option value="INR">INR - Indische Rupie</option>
+              <option value="JPY">JPY - Japanischer Yen</option>
+              <option value="CNY">CNY - Chinesischer Yuan</option>
+              <option value="AUD">AUD - Australischer Dollar</option>
+              <option value="CAD">CAD - Kanadischer Dollar</option>
+              <option value="SEK">SEK - Schwedische Krone</option>
+              <option value="NOK">NOK - Norwegische Krone</option>
+              <option value="DKK">DKK - Dänische Krone</option>
+              <option value="PLN">PLN - Polnischer Złoty</option>
+              <option value="CZK">CZK - Tschechische Krone</option>
+              <option value="HUF">HUF - Ungarischer Forint</option>
+              <option value="RON">RON - Rumänischer Leu</option>
+              <option value="BGN">BGN - Bulgarischer Lew</option>
+              <option value="AED">AED - VAE-Dirham</option>
+              <option value="SAR">SAR - Saudi-Riyal</option>
+              <option value="QAR">QAR - Katar-Riyal</option>
+              <option value="KWD">KWD - Kuwait-Dinar</option>
+              <option value="BRL">BRL - Brasilianischer Real</option>
+              <option value="MXN">MXN - Mexikanischer Peso</option>
+              <option value="ZAR">ZAR - Südafrikanischer Rand</option>
+            </select>
+          </div>
+
+          <div class="amount-box">
+            <p id="toCurrencyCode">USD</p>
+            <h2 id="toAmount">1.085,20</h2>
+          </div>
+        </div>
+
+        <div class="rate-info" id="rateInfo">
+          1 EUR = 1,0852 USD
+        </div>
+      </div>
+
+      <div class="number-pad">
+        <button data-value="1">1</button>
+        <button data-value="2">2</button>
+        <button data-value="3">3</button>
+
+        <button data-value="4">4</button>
+        <button data-value="5">5</button>
+        <button data-value="6">6</button>
+
+        <button data-value="7">7</button>
+        <button data-value="8">8</button>
+        <button data-value="9">9</button>
+
+        <button data-value=",">,</button>
+        <button data-value="0">0</button>
+        <button data-value="delete" class="delete-btn">⌫</button>
+      </div>
+
+      <div class="content-section">
+        <div class="section-header">
+          <h3 id="moreCurrenciesTitle">Weitere Währungen</h3>
+        </div>
+
+        <div class="currency-card">
+          <div class="currency-left">
+            <div class="circle-icon">💷</div>
+            <div>
+              <h4 id="extra1Code">GBP</h4>
+              <p id="extra1Name">Britisches Pfund</p>
+            </div>
+          </div>
+
+          <div class="currency-right">
+            <h4 id="extra1Amount">854,15</h4>
+            <p id="extra1Rate">1 EUR = 0,8542 GBP</p>
+          </div>
+        </div>
+
+        <div class="currency-card">
+          <div class="currency-left">
+            <div class="circle-icon">₹</div>
+            <div>
+              <h4 id="extra2Code">INR</h4>
+              <p id="extra2Name">Indische Rupie</p>
+            </div>
+          </div>
+
+          <div class="currency-right">
+            <h4 id="extra2Amount">90.145,50</h4>
+            <p id="extra2Rate">1 EUR = 90,1455 INR</p>
+          </div>
+        </div>
+
+        <div class="currency-card">
+          <div class="currency-left">
+            <div class="circle-icon">₺</div>
+            <div>
+              <h4 id="extra3Code">TRY</h4>
+              <p id="extra3Name">Türkische Lira</p>
+            </div>
+          </div>
+
+          <div class="currency-right">
+            <h4 id="extra3Amount">35.200,00</h4>
+            <p id="extra3Rate">1 EUR = 35,2000 TRY</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SCREEN 2: VERLAUF -->
+    <section class="screen" id="historyScreen">
+      <div class="page-title">
+        <p id="historySubtitle">WÄHRUNGS-ZENTRALE</p>
+        <h2 id="historyTitle">Verlauf</h2>
+      </div>
+
+      <div class="search-box">
+        <span>🔍</span>
+        <input id="historySearchInput" type="text" placeholder="Suche im Verlauf" />
+      </div>
+
+      <div class="section-header screen-padding">
+        <h3 id="lastRequestsTitle">Letzte Abfragen</h3>
+        <button id="clearHistoryBtn">ALLE LÖSCHEN</button>
+      </div>
+
+      <div class="history-list" id="historyList">
+        <div class="history-card">
+          <div class="history-icon">↻</div>
+          <div>
+            <h4>150,00 EUR → USD</h4>
+            <p>VOR 5 MIN.</p>
+          </div>
+          <strong>163,24 $</strong>
+        </div>
+
+        <div class="history-card">
+          <div class="history-icon">↻</div>
+          <div>
+            <h4>1.200,00 GBP → EUR</h4>
+            <p>VOR 2 STD.</p>
+          </div>
+          <strong>1.405,60 €</strong>
+        </div>
+
+        <div class="history-card">
+          <div class="history-icon">↻</div>
+          <div>
+            <h4>50,00 CHF → EUR</h4>
+            <p>GESTERN</p>
+          </div>
+          <strong>51,20 €</strong>
+        </div>
+
+        <div class="history-card">
+          <div class="history-icon">↻</div>
+          <div>
+            <h4>5.000,00 JPY → USD</h4>
+            <p>12. MAI</p>
+          </div>
+          <strong>32,15 $</strong>
+        </div>
+      </div>
+
+      <div class="content-section no-padding">
+        <div class="favorites-header">
+          <h3 id="favoritesTitle">Favoriten</h3>
+          <button id="openFavoriteFormBtn">+ Hinzufügen</button>
+        </div>
+
+        <div class="favorite-form hidden" id="favoriteForm">
+          <div class="favorite-form-row">
+            <select id="favoriteFromSelect">
+              <option value="EUR">EUR</option>
+              <option value="USD">USD</option>
+              <option value="GBP">GBP</option>
+              <option value="CHF">CHF</option>
+              <option value="TRY">TRY</option>
+              <option value="INR">INR</option>
+              <option value="JPY">JPY</option>
+              <option value="CNY">CNY</option>
+              <option value="AUD">AUD</option>
+              <option value="CAD">CAD</option>
+              <option value="SEK">SEK</option>
+              <option value="NOK">NOK</option>
+              <option value="DKK">DKK</option>
+              <option value="PLN">PLN</option>
+              <option value="CZK">CZK</option>
+              <option value="HUF">HUF</option>
+              <option value="RON">RON</option>
+              <option value="BGN">BGN</option>
+              <option value="AED">AED</option>
+              <option value="SAR">SAR</option>
+              <option value="QAR">QAR</option>
+              <option value="KWD">KWD</option>
+              <option value="BRL">BRL</option>
+              <option value="MXN">MXN</option>
+              <option value="ZAR">ZAR</option>
+            </select>
+
+            <select id="favoriteToSelect">
+              <option value="USD">USD</option>
+              <option value="EUR">EUR</option>
+              <option value="GBP">GBP</option>
+              <option value="CHF">CHF</option>
+              <option value="TRY">TRY</option>
+              <option value="INR">INR</option>
+              <option value="JPY">JPY</option>
+              <option value="CNY">CNY</option>
+              <option value="AUD">AUD</option>
+              <option value="CAD">CAD</option>
+              <option value="SEK">SEK</option>
+              <option value="NOK">NOK</option>
+              <option value="DKK">DKK</option>
+              <option value="PLN">PLN</option>
+              <option value="CZK">CZK</option>
+              <option value="HUF">HUF</option>
+              <option value="RON">RON</option>
+              <option value="BGN">BGN</option>
+              <option value="AED">AED</option>
+              <option value="SAR">SAR</option>
+              <option value="QAR">QAR</option>
+              <option value="KWD">KWD</option>
+              <option value="BRL">BRL</option>
+              <option value="MXN">MXN</option>
+              <option value="ZAR">ZAR</option>
+            </select>
+          </div>
+
+          <button id="addFavoriteBtn">Favorit speichern</button>
+        </div>
+
+        <div id="favoritesList"></div>
+      </div>
+    </section>
+
+    <!-- SCREEN 3: ALARME -->
+    <section class="screen" id="alertsScreen">
+      <div class="page-title">
+        <p id="alertsSubtitle">BENACHRICHTIGUNGEN</p>
+        <h2 id="alertsTitle">Alarme</h2>
+      </div>
+
+      <div class="alert-card active-alert">
+        <div class="alert-top">
+          <span class="status-dot"></span>
+          <p id="activeAlertText">AKTIV</p>
+          <button>✎</button>
+        </div>
+
+        <h3>EUR zu USD</h3>
+        <p class="alert-condition" id="alertConditionOne">Melden, wenn &gt; 1,05</p>
+
+        <div class="alert-bottom">
+          <div>
+            <p id="currentRateTextOne">AKTUELLER KURS</p>
+            <strong>1,0842</strong>
+          </div>
+
+          <label class="switch">
+            <input type="checkbox" checked />
+            <span></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="alert-card">
+        <div class="alert-top">
+          <span class="status-dot paused"></span>
+          <p id="pausedAlertText">PAUSIERT</p>
+          <button>✎</button>
+        </div>
+
+        <h3>GBP zu INR</h3>
+        <p class="alert-condition" id="alertConditionTwo">Melden, wenn &gt; 105,00</p>
+
+        <div class="alert-bottom">
+          <div>
+            <p id="currentRateTextTwo">AKTUELLER KURS</p>
+            <strong>104,20</strong>
+          </div>
+
+          <label class="switch">
+            <input type="checkbox" />
+            <span></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="empty-alert-box">
+        <div>🔔</div>
+        <p id="emptyAlertText">Füge weitere Währungspaare zur Überwachung hinzu</p>
+      </div>
+
+      <button class="floating-add-btn">+</button>
+    </section>
+
+    <!-- SCREEN 4: EINSTELLUNGEN -->
+    <section class="screen" id="settingsScreen">
+      <div class="page-title">
+        <h2 id="settingsTitle">Einstellungen</h2>
+        <p id="settingsSubtitle">Hier kannst du Darstellung und Optionen anpassen.</p>
+      </div>
+
+      <div class="settings-group">
+        <h3 id="generalTitle">ALLGEMEIN</h3>
+
+        <div class="setting-card setting-select-card">
+          <div class="setting-left">
+            <span>🌐</span>
+            <div>
+              <h4 id="languageTitle">Sprache</h4>
+              <p id="languageDesc">Systemsprache auswählen</p>
+            </div>
+          </div>
+
+          <select id="languageSelect" class="setting-select">
+            <option value="de">Deutsch</option>
+            <option value="en">English</option>
+          </select>
+        </div>
+
+        <div class="setting-card setting-select-card">
+          <div class="setting-left">
+            <span>💱</span>
+            <div>
+              <h4 id="homeCurrencyTitle">Heimatwährung</h4>
+              <p id="homeCurrencyDesc">Standardwährung auswählen</p>
+            </div>
+          </div>
+
+          <select id="homeCurrencySelect" class="setting-select">
+            <option value="EUR">EUR - Euro</option>
+            <option value="USD">USD - US-Dollar</option>
+            <option value="GBP">GBP - Britisches Pfund</option>
+            <option value="CHF">CHF - Schweizer Franken</option>
+            <option value="TRY">TRY - Türkische Lira</option>
+            <option value="INR">INR - Indische Rupie</option>
+            <option value="JPY">JPY - Japanischer Yen</option>
+            <option value="CNY">CNY - Chinesischer Yuan</option>
+            <option value="AUD">AUD - Australischer Dollar</option>
+            <option value="CAD">CAD - Kanadischer Dollar</option>
+            <option value="SEK">SEK - Schwedische Krone</option>
+            <option value="NOK">NOK - Norwegische Krone</option>
+            <option value="DKK">DKK - Dänische Krone</option>
+            <option value="PLN">PLN - Polnischer Złoty</option>
+            <option value="CZK">CZK - Tschechische Krone</option>
+            <option value="HUF">HUF - Ungarischer Forint</option>
+            <option value="RON">RON - Rumänischer Leu</option>
+            <option value="BGN">BGN - Bulgarischer Lew</option>
+            <option value="AED">AED - VAE-Dirham</option>
+            <option value="SAR">SAR - Saudi-Riyal</option>
+            <option value="QAR">QAR - Katar-Riyal</option>
+            <option value="KWD">KWD - Kuwait-Dinar</option>
+            <option value="BRL">BRL - Brasilianischer Real</option>
+            <option value="MXN">MXN - Mexikanischer Peso</option>
+            <option value="ZAR">ZAR - Südafrikanischer Rand</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="settings-group">
+        <h3 id="appearanceTitle">ERSCHEINUNGSBILD</h3>
+
+        <div class="setting-card">
+          <div class="setting-left">
+            <span>☀</span>
+            <div>
+              <h4 id="themeTitle">Heller Modus</h4>
+              <p id="themeDesc">Beim Aktivieren wird die App weiß</p>
+            </div>
+          </div>
+
+          <label class="switch">
+            <input type="checkbox" id="themeToggle" />
+            <span></span>
+          </label>
+        </div>
+
+        <div class="setting-card setting-select-card">
+          <div class="setting-left">
+            <span>Aa</span>
+            <div>
+              <h4 id="fontSizeTitle">Schriftgröße</h4>
+              <p id="fontSizeDesc">Textgröße anpassen</p>
+            </div>
+          </div>
+
+          <select id="fontSizeSelect" class="setting-select">
+            <option value="small">Klein</option>
+            <option value="normal" selected>Standard</option>
+            <option value="large">Groß</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="settings-group">
+        <h3 id="dataTitle">DATEN</h3>
+
+        <div class="setting-card">
+          <div class="setting-left">
+            <span>☁</span>
+            <div>
+              <h4 id="offlineTitle">Offline-Modus</h4>
+              <p id="offlineDesc">Nur über WLAN synchronisieren</p>
+            </div>
+          </div>
+
+          <label class="switch">
+            <input type="checkbox" />
+            <span></span>
+          </label>
+        </div>
+
+        <div class="setting-card danger-card">
+          <div class="setting-left">
+            <span>⌫</span>
+            <div>
+              <h4 id="cacheTitle">Cache leeren</h4>
+              <p id="cacheDesc">Lokalen Speicher freigeben</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- BOTTOM NAV -->
+    <nav class="bottom-nav">
+      <button class="nav-btn active" data-screen="converterScreen">
+        <span>↻</span>
+        <p id="navConverter">Konverter</p>
+      </button>
+
+      <button class="nav-btn" data-screen="historyScreen">
+        <span>🕘</span>
+        <p id="navHistory">Verlauf</p>
+      </button>
+
+      <button class="nav-btn" data-screen="alertsScreen">
+        <span>♢</span>
+        <p id="navAlerts">Alarme</p>
+      </button>
+
+      <button class="nav-btn" data-screen="settingsScreen">
+        <span>⚙</span>
+        <p id="navSettings">Einstellungen</p>
+      </button>
+    </nav>
+
+  </main>
+
+  <script src="script.js"></script>
 </body>
 </html>
