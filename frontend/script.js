@@ -105,33 +105,7 @@ const currencyNamesEnglish = {
   Beispielkurse:
   Basis: 1 EUR = x Fremdwährung
 */
-const eurRates = {
-  EUR: 1,
-  USD: 1.0852,
-  GBP: 0.85415,
-  CHF: 0.97,
-  TRY: 35.2,
-  INR: 90.1455,
-  JPY: 169.8,
-  CNY: 7.85,
-  AUD: 1.65,
-  CAD: 1.48,
-  SEK: 11.25,
-  NOK: 11.45,
-  DKK: 7.46,
-  PLN: 4.31,
-  CZK: 25.1,
-  HUF: 392.4,
-  RON: 4.98,
-  BGN: 1.96,
-  AED: 3.98,
-  SAR: 4.07,
-  QAR: 3.95,
-  KWD: 0.33,
-  BRL: 5.42,
-  MXN: 18.35,
-  ZAR: 20.1
-};
+let eurRates = {};
 
 let favorites = [
   { from: "EUR", to: "USD" },
@@ -598,5 +572,22 @@ if (languageSelect) {
   });
 }
 
-renderFavorites();
-updateConverter();
+async function loadRates() {
+  try {
+    const response = await fetch("http://localhost:3000/rates");
+    const data = await response.json();
+
+    eurRates = {};
+
+    for (const key in data) {
+      eurRates[key.toUpperCase()] = data[key];
+    }
+
+    updateConverter();
+
+  } catch (error) {
+    console.error("Fehler beim Laden der Kurse:", error);
+  }
+}
+
+loadRates();
