@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'services/api_service.dart';
 
 void main() {
   SystemChrome.setSystemUIOverlayStyle(
@@ -488,9 +489,26 @@ class _ConverterScreenState extends State<ConverterScreen> {
 
   double get _inputValue => double.tryParse(_input) ?? 1000;
 
-  double get _result {
-    final inEur = _inputValue / kRates[_from]!;
-    return inEur * kRates[_to]!;
+  String _resultText = 'Lade...';
+  
+  @override
+  void initState() {
+    super.initState();
+    // Das sagt der App: Rechne SOFORT einmal um, wenn du startest!
+    _rechneMitApi(); 
+  }
+
+  Future<void> _rechneMitApi() async {
+    final ergebnis = await ApiService().berechneWaehrung(_from, _to, _inputValue);
+    if (ergebnis != null) {
+      setState(() {
+        _resultText = ergebnis.toStringAsFixed(2);
+      });
+    } else {
+      setState(() {
+        _resultText = 'Fehler';
+      });
+    }
   }
 
   double get _rate => kRates[_to]! / kRates[_from]!;
@@ -515,6 +533,7 @@ class _ConverterScreenState extends State<ConverterScreen> {
         }
       }
     });
+    _rechneMitApi();
   }
 
   void _swap() {
@@ -523,6 +542,7 @@ class _ConverterScreenState extends State<ConverterScreen> {
       _from = _to;
       _to = temp;
     });
+    _rechneMitApi();
   }
 
   String _formatDisplay(String raw) {
@@ -607,7 +627,7 @@ class _ConverterScreenState extends State<ConverterScreen> {
 
                     _CurrencyRow(
                       currency: _to,
-                      amount: _result.toStringAsFixed(2),
+                      amount: _resultText,
                       isFrom: false,
                       onTap: () => _pickCurrency(false),
                     ),
@@ -699,6 +719,7 @@ class _ConverterScreenState extends State<ConverterScreen> {
           _to = picked;
         }
       });
+      _rechneMitApi();
     }
   }
 }
@@ -1276,7 +1297,7 @@ class _CurrencyDropdown extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DropdownButtonFormField<String>(
-      value: value,
+      initialValue: value,
       dropdownColor: cardColor(context),
       decoration: InputDecoration(
         labelText: label,
@@ -1751,7 +1772,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           : tr(widget.language, 'Hellmodus aktiviert', 'Light mode enabled'),
                     );
                   },
-                  activeColor: greenColor(context),
+                  activeThumbColor: greenColor(context),
                 ),
               ),
               _SettingsTile(
@@ -1787,7 +1808,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           : tr(widget.language, 'Offline-Modus deaktiviert', 'Offline mode disabled'),
                     );
                   },
-                  activeColor: greenColor(context),
+                  activeThumbColor: greenColor(context),
                 ),
               ),
               _SettingsTile(
