@@ -356,6 +356,23 @@ class BrandHeader extends StatelessWidget {
   }
 }
 
+// Ein einzelner Verlaufseintrag
+class ConversionHistoryItem {
+  final String from;
+  final String to;
+  final double input;
+  final double output;
+  final DateTime createdAt;
+
+  const ConversionHistoryItem({
+    required this.from,
+    required this.to,
+    required this.input,
+    required this.output,
+    required this.createdAt,
+  });
+}
+
 // Hauptscreen
 class MainScreen extends StatefulWidget {
   final bool darkMode;
@@ -378,12 +395,40 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _tab = 0;
 
+  final List<ConversionHistoryItem> _historyItems = [];
+
+  void _addHistoryItem(ConversionHistoryItem item) {
+    setState(() {
+      _historyItems.insert(0, item);
+    });
+  }
+
+  void _clearHistoryItems() {
+    setState(() {
+      _historyItems.clear();
+    });
+  }
+
+  void _deleteHistoryItem(int index) {
+    setState(() {
+      _historyItems.removeAt(index);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final screens = [
-      ConverterScreen(language: widget.language),
+      ConverterScreen(
+        language: widget.language,
+        onCalculationFinished: _addHistoryItem,
+      ),
       FavoritesScreen(language: widget.language),
-      HistoryScreen(language: widget.language),
+      HistoryScreen(
+        language: widget.language,
+        items: _historyItems,
+        onClear: _clearHistoryItems,
+        onDelete: _deleteHistoryItem,
+      ),
       SettingsScreen(
         darkMode: widget.darkMode,
         language: widget.language,
@@ -472,10 +517,12 @@ class _BottomNav extends StatelessWidget {
 // Konverter
 class ConverterScreen extends StatefulWidget {
   final String language;
+  final ValueChanged<ConversionHistoryItem> onCalculationFinished;
 
   const ConverterScreen({
     super.key,
     required this.language,
+    required this.onCalculationFinished,
   });
 
   @override
@@ -485,42 +532,90 @@ class ConverterScreen extends StatefulWidget {
 class _ConverterScreenState extends State<ConverterScreen> {
   String _from = 'EUR';
   String _to = 'USD';
-  String _input = '1000';
 
-  double get _inputValue => double.tryParse(_input) ?? 1000;
+  // Startwert ist jetzt 0 und nicht mehr 1000
+  String _input = '0';
 
-  String _resultText = 'Lade...';
-  
-  @override
-  void initState() {
-    super.initState();
-    // Das sagt der App: Rechne SOFORT einmal um, wenn du startest!
-    _rechneMitApi(); 
-  }
+  double get _inputValue => double.tryParse(_input) ?? 0;
 
-  Future<void> _rechneMitApi() async {
-    final ergebnis = await ApiService().berechneWaehrung(_from, _to, _inputValue);
+  String _resultText = '0.00';
+  double? _apiRate;
+  int _requestId = 0;
+
+  double get _rate => kRates[_to]! / kRates[_from]!;
+
+  Future<double?> _rechneMitApi() async {
+    final amount = _inputValue;
+    final currentRequestId = ++_requestId;
+
+    if (amount <= 0) {
+      if (!mounted) return null;
+
+      setState(() {
+        _resultText = '0.00';
+        _apiRate = null;
+      });
+
+      return 0;
+    }
+
+    final ergebnis = await ApiService().berechneWaehrung(_from, _to, amount);
+
+    if (!mounted || currentRequestId != _requestId) {
+      return null;
+    }
+
     if (ergebnis != null) {
       setState(() {
         _resultText = ergebnis.toStringAsFixed(2);
+        _apiRate = ergebnis / amount;
       });
+
+      return ergebnis;
     } else {
       setState(() {
         _resultText = 'Fehler';
       });
+
+      return null;
     }
   }
 
-  double get _rate => kRates[_to]! / kRates[_from]!;
+  Future<void> _finishCalculation() async {
+    final amount = _inputValue;
+
+    if (amount <= 0) {
+      return;
+    }
+
+    final result = await _rechneMitApi();
+
+    if (!mounted || result == null || result <= 0) {
+      return;
+    }
+
+    widget.onCalculationFinished(
+      ConversionHistoryItem(
+        from: _from,
+        to: _to,
+        input: amount,
+        output: result,
+        createdAt: DateTime.now(),
+      ),
+    );
+
+    setState(() {
+      // Nach abgeschlossener Rechnung wieder auf 0 setzen
+      _input = '0';
+      _resultText = '0.00';
+      _apiRate = null;
+    });
+  }
 
   void _pressKey(String key) {
     setState(() {
       if (key == '⌫') {
-        if (_input.length > 1) {
-          _input = _input.substring(0, _input.length - 1);
-        } else {
-          _input = '0';
-        }
+        _input = '0';
       } else if (key == '.') {
         if (!_input.contains('.')) {
           _input += '.';
@@ -533,6 +628,7 @@ class _ConverterScreenState extends State<ConverterScreen> {
         }
       }
     });
+
     _rechneMitApi();
   }
 
@@ -542,6 +638,7 @@ class _ConverterScreenState extends State<ConverterScreen> {
       _from = _to;
       _to = temp;
     });
+
     _rechneMitApi();
   }
 
@@ -658,7 +755,7 @@ class _ConverterScreenState extends State<ConverterScreen> {
                             ),
                           ),
                           Text(
-                            '${_rate.toStringAsFixed(4)} $_to',
+                            '${(_apiRate ?? _rate).toStringAsFixed(4)} $_to',
                             style: TextStyle(
                               color: textColor(context),
                               fontSize: 13,
@@ -692,6 +789,33 @@ class _ConverterScreenState extends State<ConverterScreen> {
               const SizedBox(height: 18),
 
               _Numpad(onKey: _pressKey),
+
+              const SizedBox(height: 10),
+
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _finishCalculation,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: greenColor(context),
+                    foregroundColor: isDarkMode(context)
+                        ? AppColors.darkBg
+                        : Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: Text(
+                    tr(
+                      widget.language,
+                      'Berechnung abschließen',
+                      'Finish calculation',
+                    ),
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -719,6 +843,7 @@ class _ConverterScreenState extends State<ConverterScreen> {
           _to = picked;
         }
       });
+
       _rechneMitApi();
     }
   }
@@ -1330,10 +1455,16 @@ class _CurrencyDropdown extends StatelessWidget {
 // Verlauf
 class HistoryScreen extends StatefulWidget {
   final String language;
+  final List<ConversionHistoryItem> items;
+  final VoidCallback onClear;
+  final ValueChanged<int> onDelete;
 
   const HistoryScreen({
     super.key,
     required this.language,
+    required this.items,
+    required this.onClear,
+    required this.onDelete,
   });
 
   @override
@@ -1341,36 +1472,68 @@ class HistoryScreen extends StatefulWidget {
 }
 
 class _HistoryScreenState extends State<HistoryScreen> {
-  List<(String, String, double, double)> items = [
-    ('EUR', 'USD', 150.0, 163.24),
-    ('GBP', 'EUR', 1200.0, 1409.50),
-    ('CHF', 'EUR', 50.0, 51.20),
-    ('JPY', 'USD', 5000.0, 32.15),
-    ('EUR', 'USD', 200.0, 184.50),
-  ];
+  String _search = '';
+
+  List<ConversionHistoryItem> get _filteredItems {
+    final query = _search.trim().toLowerCase();
+
+    if (query.isEmpty) {
+      return widget.items;
+    }
+
+    return widget.items.where((item) {
+      return item.from.toLowerCase().contains(query) ||
+          item.to.toLowerCase().contains(query) ||
+          nameOf(item.from).toLowerCase().contains(query) ||
+          nameOf(item.to).toLowerCase().contains(query);
+    }).toList();
+  }
+
+  String _formatAmount(double value) {
+    if (value >= 1000) {
+      return value.toStringAsFixed(0);
+    }
+
+    return value.toStringAsFixed(2);
+  }
+
+  String _timeAgo(DateTime date) {
+    final diff = DateTime.now().difference(date);
+
+    if (diff.inMinutes < 1) return 'GERADE EBEN';
+    if (diff.inMinutes == 1) return '1 MIN';
+    if (diff.inMinutes < 60) return '${diff.inMinutes} MIN';
+    if (diff.inHours == 1) return '1 STD';
+    if (diff.inHours < 24) return '${diff.inHours} STD';
+
+    return '${diff.inDays} TAGE';
+  }
 
   void _clearHistory() {
-    setState(() {
-      items.clear();
-    });
+    widget.onClear();
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(tr(widget.language, 'Verlauf wurde gelöscht', 'History deleted')),
+        content: Text(
+          tr(widget.language, 'Verlauf wurde gelöscht', 'History deleted'),
+        ),
         backgroundColor: cardColor(context),
       ),
     );
   }
 
-  void _deleteItem(int index) {
-    setState(() {
-      items.removeAt(index);
-    });
+  void _deleteItem(ConversionHistoryItem item) {
+    final originalIndex = widget.items.indexOf(item);
+
+    if (originalIndex != -1) {
+      widget.onDelete(originalIndex);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final green = greenColor(context);
+    final filteredItems = _filteredItems;
 
     return SafeArea(
       child: Padding(
@@ -1391,7 +1554,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
             ),
             const SizedBox(height: 4),
             Text(
-              tr(widget.language, 'Verlauf deiner letzten Umrechnungen', 'History of your last conversions'),
+              tr(
+                widget.language,
+                'Verlauf deiner letzten Umrechnungen',
+                'History of your last conversions',
+              ),
               style: TextStyle(
                 color: mutedColor(context),
                 fontSize: 14,
@@ -1414,8 +1581,17 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   Expanded(
                     child: TextField(
                       style: TextStyle(color: textColor(context), fontSize: 14),
+                      onChanged: (value) {
+                        setState(() {
+                          _search = value;
+                        });
+                      },
                       decoration: InputDecoration(
-                        hintText: tr(widget.language, 'Suche nach Land oder Währung', 'Search country or currency'),
+                        hintText: tr(
+                          widget.language,
+                          'Suche nach Land oder Währung',
+                          'Search country or currency',
+                        ),
                         hintStyle: TextStyle(
                           color: mutedColor(context),
                           fontSize: 14,
@@ -1442,7 +1618,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     ),
                   ),
                 ),
-                if (items.isNotEmpty)
+                if (widget.items.isNotEmpty)
                   TextButton(
                     onPressed: _clearHistory,
                     child: Text(
@@ -1460,103 +1636,119 @@ class _HistoryScreenState extends State<HistoryScreen> {
             const SizedBox(height: 8),
 
             Expanded(
-              child: items.isEmpty
+              child: widget.items.isEmpty
                   ? Center(
                       child: Text(
-                        tr(widget.language, 'Noch kein Verlauf vorhanden', 'No history yet'),
+                        tr(
+                          widget.language,
+                          'Noch kein Verlauf vorhanden',
+                          'No history yet',
+                        ),
                         style: TextStyle(color: mutedColor(context)),
                       ),
                     )
-                  : ListView.builder(
-                      physics: const BouncingScrollPhysics(),
-                      itemCount: items.length,
-                      itemBuilder: (_, i) {
-                        final item = items[i];
-
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 10),
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: cardColor(context),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: borderColor(context)),
+                  : filteredItems.isEmpty
+                      ? Center(
+                          child: Text(
+                            tr(
+                              widget.language,
+                              'Keine passenden Einträge gefunden',
+                              'No matching entries found',
+                            ),
+                            style: TextStyle(color: mutedColor(context)),
                           ),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 40,
-                                height: 40,
-                                decoration: BoxDecoration(
-                                  color: green.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Icon(
-                                  Icons.currency_exchange,
-                                  color: green,
-                                  size: 20,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
+                        )
+                      : ListView.builder(
+                          physics: const BouncingScrollPhysics(),
+                          itemCount: filteredItems.length,
+                          itemBuilder: (_, i) {
+                            final item = filteredItems[i];
 
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      '${item.$1} zu ${item.$2}',
-                                      style: TextStyle(
-                                        color: textColor(context),
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 14,
-                                      ),
-                                    ),
-                                    Text(
-                                      '${flagOf(item.$1)} ${item.$1} • 1 MIN',
-                                      style: TextStyle(
-                                        color: mutedColor(context),
-                                        fontSize: 11,
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 10),
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: cardColor(context),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(color: borderColor(context)),
                               ),
-
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
+                              child: Row(
                                 children: [
-                                  Text(
-                                    '${item.$3.toStringAsFixed(2)} ${item.$1}',
-                                    style: TextStyle(
-                                      color: mutedColor(context),
-                                      fontSize: 12,
+                                  Container(
+                                    width: 40,
+                                    height: 40,
+                                    decoration: BoxDecoration(
+                                      color: green.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Icon(
+                                      Icons.currency_exchange,
+                                      color: green,
+                                      size: 20,
                                     ),
                                   ),
-                                  Text(
-                                    '${item.$4.toStringAsFixed(2)} ${item.$2}',
-                                    style: TextStyle(
-                                      color: green,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 14,
+                                  const SizedBox(width: 12),
+
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          '${item.from} ${tr(widget.language, 'zu', 'to')} ${item.to}',
+                                          style: TextStyle(
+                                            color: textColor(context),
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                        Text(
+                                          '${flagOf(item.from)} ${item.from} • ${_timeAgo(item.createdAt)}',
+                                          style: TextStyle(
+                                            color: mutedColor(context),
+                                            fontSize: 11,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      Text(
+                                        '${_formatAmount(item.input)} ${item.from}',
+                                        style: TextStyle(
+                                          color: mutedColor(context),
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                      Text(
+                                        '${_formatAmount(item.output)} ${item.to}',
+                                        style: TextStyle(
+                                          color: green,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+
+                                  const SizedBox(width: 8),
+
+                                  GestureDetector(
+                                    onTap: () => _deleteItem(item),
+                                    child: Icon(
+                                      Icons.delete_outline,
+                                      color: mutedColor(context),
+                                      size: 18,
                                     ),
                                   ),
                                 ],
                               ),
-
-                              const SizedBox(width: 8),
-
-                              GestureDetector(
-                                onTap: () => _deleteItem(i),
-                                child: Icon(
-                                  Icons.delete_outline,
-                                  color: mutedColor(context),
-                                  size: 18,
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
+                            );
+                          },
+                        ),
             ),
           ],
         ),
