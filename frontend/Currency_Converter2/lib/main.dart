@@ -25,6 +25,7 @@ class _CurrencyAppState extends State<CurrencyApp> {
   String _language = 'Deutsch';
   String _homeCurrency = 'EUR';
   String _fontSize = 'Standard';
+  bool _offlineMode = false;
 
   @override
   void initState() {
@@ -39,6 +40,7 @@ class _CurrencyAppState extends State<CurrencyApp> {
       _language = prefs.getString('language') ?? 'Deutsch';
       _homeCurrency = prefs.getString('homeCurrency') ?? 'EUR';
       _fontSize = prefs.getString('fontSize') ?? 'Standard';
+      _offlineMode = prefs.getBool('offlineMode') ?? false;
     });
   }
 
@@ -48,6 +50,7 @@ class _CurrencyAppState extends State<CurrencyApp> {
     await prefs.setString('language', _language);
     await prefs.setString('homeCurrency', _homeCurrency);
     await prefs.setString('fontSize', _fontSize);
+    await prefs.setBool('offlineMode', _offlineMode);
   }
 
   @override
@@ -107,6 +110,7 @@ class _CurrencyAppState extends State<CurrencyApp> {
         language: _language,
         homeCurrency: _homeCurrency,
         fontSize: _fontSize,
+        offlineMode: _offlineMode,
         onDarkModeChanged: (value) {
           setState(() {
             _darkMode = value;
@@ -128,6 +132,12 @@ class _CurrencyAppState extends State<CurrencyApp> {
         onFontSizeChanged: (value) {
           setState(() {
             _fontSize = value;
+          });
+          _savePrefs();
+        },
+        onOfflineModeChanged: (value) {
+          setState(() {
+            _offlineMode = value;
           });
           _savePrefs();
         },
@@ -433,10 +443,12 @@ class MainScreen extends StatefulWidget {
   final String language;
   final String homeCurrency;
   final String fontSize;
+  final bool offlineMode;
   final ValueChanged<bool> onDarkModeChanged;
   final ValueChanged<String> onLanguageChanged;
   final ValueChanged<String> onHomeCurrencyChanged;
   final ValueChanged<String> onFontSizeChanged;
+  final ValueChanged<bool> onOfflineModeChanged;
 
   const MainScreen({
     super.key,
@@ -444,10 +456,12 @@ class MainScreen extends StatefulWidget {
     required this.language,
     required this.homeCurrency,
     required this.fontSize,
+    required this.offlineMode,
     required this.onDarkModeChanged,
     required this.onLanguageChanged,
     required this.onHomeCurrencyChanged,
     required this.onFontSizeChanged,
+    required this.onOfflineModeChanged,
   });
 
   @override
@@ -457,7 +471,6 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _tab = 0;
   
-  // Dieser Schlüssel erlaubt uns, den Konverter von außen (aus Favoriten) zu steuern
   final GlobalKey<_ConverterScreenState> _converterKey = GlobalKey();
 
   final List<ConversionHistoryItem> _historyItems = [];
@@ -472,7 +485,6 @@ class _MainScreenState extends State<MainScreen> {
   Future<void> _loadData() async {
     final prefs = await SharedPreferences.getInstance();
 
-    // Verlauf laden
     final historyJson = prefs.getStringList('history') ?? [];
     final loadedHistory = historyJson.map((e) {
       final parts = e.split('|');
@@ -485,7 +497,6 @@ class _MainScreenState extends State<MainScreen> {
       );
     }).toList();
 
-    // Favoriten laden
     final favsJson = prefs.getStringList('favorites') ?? [];
     final loadedFavs = favsJson.map((e) {
       final parts = e.split('|');
@@ -568,20 +579,19 @@ class _MainScreenState extends State<MainScreen> {
   Widget build(BuildContext context) {
     final screens = [
       ConverterScreen(
-        key: _converterKey, // Schlüssel übergeben
+        key: _converterKey,
         language: widget.language,
         homeCurrency: widget.homeCurrency,
+        offlineMode: widget.offlineMode, // Offline-Status wird übergeben!
         onCalculationFinished: _addHistoryItem,
       ),
       FavoritesScreen(
         language: widget.language,
         favItems: _favItems,
         onFavoriteSelected: (from, to) {
-          // 1. Tab wechseln auf Konverter (Index 0)
           setState(() {
             _tab = 0;
           });
-          // 2. Dem Konverter sagen: Setze diese beiden Währungen ein!
           _converterKey.currentState?.setCurrencies(from, to);
         },
         onAdd: _addFavorite,
@@ -599,17 +609,18 @@ class _MainScreenState extends State<MainScreen> {
         language: widget.language,
         homeCurrency: widget.homeCurrency,
         fontSize: widget.fontSize,
+        offlineMode: widget.offlineMode,
         onDarkModeChanged: widget.onDarkModeChanged,
         onLanguageChanged: widget.onLanguageChanged,
         onHomeCurrencyChanged: widget.onHomeCurrencyChanged,
         onFontSizeChanged: widget.onFontSizeChanged,
+        onOfflineModeChanged: widget.onOfflineModeChanged,
         onClearData: _clearAllData,
       ),
     ];
 
     return Scaffold(
       backgroundColor: bgColor(context),
-      // HIER IST DER FIX FÜR DAS GEDAENCHTNIS-PROBLEM: IndexedStack!
       body: IndexedStack(
         index: _tab,
         children: screens,
@@ -692,12 +703,14 @@ class _BottomNav extends StatelessWidget {
 class ConverterScreen extends StatefulWidget {
   final String language;
   final String homeCurrency;
+  final bool offlineMode;
   final ValueChanged<ConversionHistoryItem> onCalculationFinished;
 
   const ConverterScreen({
     super.key,
     required this.language,
     required this.homeCurrency,
+    required this.offlineMode,
     required this.onCalculationFinished,
   });
 
@@ -723,7 +736,6 @@ class _ConverterScreenState extends State<ConverterScreen> {
   void initState() {
     super.initState();
     _from = widget.homeCurrency;
-    // Sicherstellen, dass _to != _from
     if (_to == _from) {
       _to = _from == 'EUR' ? 'USD' : 'EUR';
     }
@@ -732,8 +744,6 @@ class _ConverterScreenState extends State<ConverterScreen> {
   @override
   void didUpdateWidget(ConverterScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Wenn sich die Heimwährung in den Einstellungen ändert,
-    // wird _from im Konverter aktualisiert
     if (oldWidget.homeCurrency != widget.homeCurrency) {
       setState(() {
         _from = widget.homeCurrency;
@@ -743,15 +753,18 @@ class _ConverterScreenState extends State<ConverterScreen> {
       });
       _rechneMitApi();
     }
+    // Wenn Offline-Modus umgeschaltet wird, evtl. neu berechnen
+    if (oldWidget.offlineMode != widget.offlineMode) {
+      _rechneMitApi();
+    }
   }
 
-  // Diese neue Funktion wird von den Favoriten aus aufgerufen!
   void setCurrencies(String newFrom, String newTo) {
     setState(() {
       _from = newFrom;
       _to = newTo;
     });
-    _rechneMitApi(); // Direkt neu ausrechnen
+    _rechneMitApi();
   }
 
   Future<double?> _rechneMitApi() async {
@@ -769,7 +782,13 @@ class _ConverterScreenState extends State<ConverterScreen> {
       return 0;
     }
 
-    final ergebnis = await ApiService().berechneWaehrung(_from, _to, amount);
+    // Hier übergeben wir den Offline-Status an die API
+    final ergebnis = await ApiService().berechneWaehrung(
+      _from, 
+      _to, 
+      amount, 
+      offlineModus: widget.offlineMode,
+    );
 
     if (!mounted || currentRequestId != _requestId) {
       return null;
@@ -783,11 +802,14 @@ class _ConverterScreenState extends State<ConverterScreen> {
 
       return ergebnis;
     } else {
+      // Absoluter Fallback: Wenn Cache leer UND Internet weg ist
+      final fallbackRate = kRates[_to]! / kRates[_from]!;
       setState(() {
-        _resultText = 'Fehler';
+        _resultText = (amount * fallbackRate).toStringAsFixed(2);
+        _apiRate = fallbackRate;
       });
 
-      return null;
+      return amount * fallbackRate;
     }
   }
 
@@ -971,23 +993,42 @@ class _ConverterScreenState extends State<ConverterScreen> {
                               fontWeight: FontWeight.w700,
                             ),
                           ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: green.withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              '+0.2%',
-                              style: TextStyle(
-                                color: green,
-                                fontSize: 11,
+                          if (widget.offlineMode)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.red.withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                'OFFLINE',
+                                style: TextStyle(
+                                  color: AppColors.red,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            )
+                          else
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: green.withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                'LIVE',
+                                style: TextStyle(
+                                  color: green,
+                                  fontSize: 11,
+                                ),
                               ),
                             ),
-                          ),
                         ],
                       ),
                     ),
@@ -1407,10 +1448,21 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     if (result != null) {
       widget.onAdd(result.$1, result.$2);
 
+      // Hier SnackBars anzeigen ohne sie vorher zu löschen
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('${result.$1} / ${result.$2} wurde hinzugefügt'),
+          content: Row(
+            children: [
+              const Icon(Icons.star, color: AppColors.green, size: 18),
+              const SizedBox(width: 10),
+              Text(tr(widget.language, '${result.$1} / ${result.$2} hinzugefügt', '${result.$1} / ${result.$2} added')),
+            ],
+          ),
           backgroundColor: cardColor(context),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 80),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          duration: const Duration(seconds: 2),
         ),
       );
     }
@@ -1423,8 +1475,18 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('${deleted.$1} / ${deleted.$2} wurde gelöscht'),
+        content: Row(
+          children: [
+            const Icon(Icons.delete_outline, color: AppColors.red, size: 18),
+            const SizedBox(width: 10),
+            Text(tr(widget.language, '${deleted.$1} / ${deleted.$2} entfernt', '${deleted.$1} / ${deleted.$2} removed')),
+          ],
+        ),
         backgroundColor: cardColor(context),
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 80),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        duration: const Duration(seconds: 2),
       ),
     );
   }
@@ -1434,8 +1496,18 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(tr(widget.language, 'Alle Favoriten wurden gelöscht', 'All favorites deleted')),
+        content: Row(
+          children: [
+            const Icon(Icons.delete_sweep_outlined, color: AppColors.red, size: 18),
+            const SizedBox(width: 10),
+            Text(tr(widget.language, 'Alle Favoriten gelöscht', 'All favorites deleted')),
+          ],
+        ),
         backgroundColor: cardColor(context),
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 80),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        duration: const Duration(seconds: 2),
       ),
     );
   }
@@ -1726,10 +1798,18 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(
-          tr(widget.language, 'Verlauf wurde gelöscht', 'History deleted'),
+        content: Row(
+          children: [
+            const Icon(Icons.delete_sweep_outlined, color: AppColors.red, size: 18),
+            const SizedBox(width: 10),
+            Text(tr(widget.language, 'Verlauf gelöscht', 'History deleted')),
+          ],
         ),
         backgroundColor: cardColor(context),
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 80),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        duration: const Duration(seconds: 2),
       ),
     );
   }
@@ -1975,10 +2055,12 @@ class SettingsScreen extends StatefulWidget {
   final String language;
   final String homeCurrency;
   final String fontSize;
+  final bool offlineMode;
   final ValueChanged<bool> onDarkModeChanged;
   final ValueChanged<String> onLanguageChanged;
   final ValueChanged<String> onHomeCurrencyChanged;
   final ValueChanged<String> onFontSizeChanged;
+  final ValueChanged<bool> onOfflineModeChanged;
   final VoidCallback onClearData;
 
   const SettingsScreen({
@@ -1987,10 +2069,12 @@ class SettingsScreen extends StatefulWidget {
     required this.language,
     required this.homeCurrency,
     required this.fontSize,
+    required this.offlineMode,
     required this.onDarkModeChanged,
     required this.onLanguageChanged,
     required this.onHomeCurrencyChanged,
     required this.onFontSizeChanged,
+    required this.onOfflineModeChanged,
     required this.onClearData,
   });
 
@@ -1999,14 +2083,24 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  bool _offlineMode = false;
   int _cacheSize = 234;
 
-  void _showMessage(String message) {
+  void _showMessage(String message, {IconData icon = Icons.check_circle_outline}) {
+    // Hier löschen wir die SnackBars NICHT mehr, damit sie sich sauber anreihen!
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message),
+        content: Row(
+          children: [
+            Icon(icon, color: AppColors.green, size: 18),
+            const SizedBox(width: 10),
+            Expanded(child: Text(message)),
+          ],
+        ),
         backgroundColor: cardColor(context),
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 80),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        duration: const Duration(seconds: 2),
       ),
     );
   }
@@ -2031,8 +2125,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       widget.onLanguageChanged(result);
       _showMessage(
         result == 'English'
-            ? 'Language changed to English'
-            : 'Sprache wurde auf Deutsch geändert',
+            ? 'Language changed to English 🇬🇧'
+            : 'Sprache auf Deutsch geändert 🇩🇪',
+        icon: Icons.translate,
       );
     }
   }
@@ -2059,9 +2154,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _showMessage(
         tr(
           widget.language,
-          'Heimwährung wurde auf $result geändert',
-          'Home currency changed to $result',
+          'Heimwährung aktualisiert: $result',
+          'Home currency updated: $result',
         ),
+        icon: Icons.home_outlined,
       );
     }
   }
@@ -2086,7 +2182,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       widget.onFontSizeChanged(result);
 
       _showMessage(
-        tr(widget.language, 'Schriftgröße wurde geändert', 'Font size changed'),
+        tr(
+          widget.language,
+          'Schriftgröße geändert: $result',
+          'Font size changed: $result',
+        ),
+        icon: Icons.text_fields,
       );
     }
   }
@@ -2102,7 +2203,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
 
     _showMessage(
-      tr(widget.language, 'Cache wurde geleert', 'Cache cleared'),
+      tr(widget.language, 'Cache geleert – Daten zurückgesetzt', 'Cache cleared – data reset'),
+      icon: Icons.cleaning_services_outlined,
     );
   }
 
@@ -2183,6 +2285,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       value
                           ? tr(widget.language, 'Dunkelmodus aktiviert', 'Dark mode enabled')
                           : tr(widget.language, 'Hellmodus aktiviert', 'Light mode enabled'),
+                      icon: value ? Icons.dark_mode_outlined : Icons.light_mode_outlined,
                     );
                   },
                   activeThumbColor: greenColor(context),
@@ -2209,16 +2312,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 icon: Icons.wifi_off_outlined,
                 label: tr(widget.language, 'Offline-Modus', 'Offline mode'),
                 trailing: Switch(
-                  value: _offlineMode,
+                  value: widget.offlineMode,
                   onChanged: (value) {
-                    setState(() {
-                      _offlineMode = value;
-                    });
+                    // Hier geben wir die Änderung direkt weiter!
+                    widget.onOfflineModeChanged(value);
 
                     _showMessage(
                       value
                           ? tr(widget.language, 'Offline-Modus aktiviert', 'Offline mode enabled')
                           : tr(widget.language, 'Offline-Modus deaktiviert', 'Offline mode disabled'),
+                      icon: value ? Icons.wifi_off_outlined : Icons.wifi_outlined,
                     );
                   },
                   activeThumbColor: greenColor(context),
