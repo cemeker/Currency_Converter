@@ -1,9 +1,11 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'services/api_service.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(statusBarColor: Colors.transparent),
   );
@@ -21,6 +23,32 @@ class CurrencyApp extends StatefulWidget {
 class _CurrencyAppState extends State<CurrencyApp> {
   bool _darkMode = true;
   String _language = 'Deutsch';
+  String _homeCurrency = 'EUR';
+  String _fontSize = 'Standard';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPrefs();
+  }
+
+  Future<void> _loadPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _darkMode = prefs.getBool('darkMode') ?? true;
+      _language = prefs.getString('language') ?? 'Deutsch';
+      _homeCurrency = prefs.getString('homeCurrency') ?? 'EUR';
+      _fontSize = prefs.getString('fontSize') ?? 'Standard';
+    });
+  }
+
+  Future<void> _savePrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('darkMode', _darkMode);
+    await prefs.setString('language', _language);
+    await prefs.setString('homeCurrency', _homeCurrency);
+    await prefs.setString('fontSize', _fontSize);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -48,17 +76,27 @@ class _CurrencyAppState extends State<CurrencyApp> {
 
       builder: (context, child) {
         final isDark = _darkMode;
+        final double scaleFactor = _fontSize == 'Klein'
+            ? 0.85
+            : _fontSize == 'Groß'
+                ? 1.2
+                : 1.0;
 
-        return Container(
-          color: isDark ? AppColors.darkBg : AppColors.lightOuterBg,
-          child: Align(
-            alignment: Alignment.topCenter,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxWidth: 430,
-                maxHeight: kIsWeb ? 760 : double.infinity,
+        return MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            textScaler: TextScaler.linear(scaleFactor),
+          ),
+          child: Container(
+            color: isDark ? AppColors.darkBg : AppColors.lightOuterBg,
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: 430,
+                  maxHeight: kIsWeb ? 760 : double.infinity,
+                ),
+                child: child ?? const SizedBox(),
               ),
-              child: child ?? const SizedBox(),
             ),
           ),
         );
@@ -67,15 +105,31 @@ class _CurrencyAppState extends State<CurrencyApp> {
       home: MainScreen(
         darkMode: _darkMode,
         language: _language,
+        homeCurrency: _homeCurrency,
+        fontSize: _fontSize,
         onDarkModeChanged: (value) {
           setState(() {
             _darkMode = value;
           });
+          _savePrefs();
         },
         onLanguageChanged: (value) {
           setState(() {
             _language = value;
           });
+          _savePrefs();
+        },
+        onHomeCurrencyChanged: (value) {
+          setState(() {
+            _homeCurrency = value;
+          });
+          _savePrefs();
+        },
+        onFontSizeChanged: (value) {
+          setState(() {
+            _fontSize = value;
+          });
+          _savePrefs();
         },
       ),
     );
@@ -377,15 +431,23 @@ class ConversionHistoryItem {
 class MainScreen extends StatefulWidget {
   final bool darkMode;
   final String language;
+  final String homeCurrency;
+  final String fontSize;
   final ValueChanged<bool> onDarkModeChanged;
   final ValueChanged<String> onLanguageChanged;
+  final ValueChanged<String> onHomeCurrencyChanged;
+  final ValueChanged<String> onFontSizeChanged;
 
   const MainScreen({
     super.key,
     required this.darkMode,
     required this.language,
+    required this.homeCurrency,
+    required this.fontSize,
     required this.onDarkModeChanged,
     required this.onLanguageChanged,
+    required this.onHomeCurrencyChanged,
+    required this.onFontSizeChanged,
   });
 
   @override
@@ -394,24 +456,111 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int _tab = 0;
+  
+  // Dieser Schlüssel erlaubt uns, den Konverter von außen (aus Favoriten) zu steuern
+  final GlobalKey<_ConverterScreenState> _converterKey = GlobalKey();
 
   final List<ConversionHistoryItem> _historyItems = [];
+  final List<(String, String, double, double)> _favItems = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    // Verlauf laden
+    final historyJson = prefs.getStringList('history') ?? [];
+    final loadedHistory = historyJson.map((e) {
+      final parts = e.split('|');
+      return ConversionHistoryItem(
+        from: parts[0],
+        to: parts[1],
+        input: double.parse(parts[2]),
+        output: double.parse(parts[3]),
+        createdAt: DateTime.parse(parts[4]),
+      );
+    }).toList();
+
+    // Favoriten laden
+    final favsJson = prefs.getStringList('favorites') ?? [];
+    final loadedFavs = favsJson.map((e) {
+      final parts = e.split('|');
+      return (parts[0], parts[1], double.parse(parts[2]), double.parse(parts[3]));
+    }).toList();
+
+    setState(() {
+      _historyItems.addAll(loadedHistory);
+      _favItems.addAll(loadedFavs);
+    });
+  }
+
+  Future<void> _saveHistory() async {
+    final prefs = await SharedPreferences.getInstance();
+    final encoded = _historyItems.map((item) =>
+      '${item.from}|${item.to}|${item.input}|${item.output}|${item.createdAt.toIso8601String()}'
+    ).toList();
+    await prefs.setStringList('history', encoded);
+  }
+
+  Future<void> _saveFavorites() async {
+    final prefs = await SharedPreferences.getInstance();
+    final encoded = _favItems.map((f) =>
+      '${f.$1}|${f.$2}|${f.$3}|${f.$4}'
+    ).toList();
+    await prefs.setStringList('favorites', encoded);
+  }
 
   void _addHistoryItem(ConversionHistoryItem item) {
     setState(() {
       _historyItems.insert(0, item);
     });
+    _saveHistory();
   }
 
   void _clearHistoryItems() {
     setState(() {
       _historyItems.clear();
     });
+    _saveHistory();
   }
 
   void _deleteHistoryItem(int index) {
     setState(() {
       _historyItems.removeAt(index);
+    });
+    _saveHistory();
+  }
+
+  void _addFavorite(String from, String to) {
+    final rate = kRates[to]! / kRates[from]!;
+    setState(() {
+      _favItems.add((from, to, rate, 0.0));
+    });
+    _saveFavorites();
+  }
+
+  void _deleteFavorite(int index) {
+    setState(() {
+      _favItems.removeAt(index);
+    });
+    _saveFavorites();
+  }
+
+  void _clearFavorites() {
+    setState(() {
+      _favItems.clear();
+    });
+    _saveFavorites();
+  }
+
+  void _clearAllData() {
+    setState(() {
+      _historyItems.clear();
+      _favItems.clear();
     });
   }
 
@@ -419,10 +568,26 @@ class _MainScreenState extends State<MainScreen> {
   Widget build(BuildContext context) {
     final screens = [
       ConverterScreen(
+        key: _converterKey, // Schlüssel übergeben
         language: widget.language,
+        homeCurrency: widget.homeCurrency,
         onCalculationFinished: _addHistoryItem,
       ),
-      FavoritesScreen(language: widget.language),
+      FavoritesScreen(
+        language: widget.language,
+        favItems: _favItems,
+        onFavoriteSelected: (from, to) {
+          // 1. Tab wechseln auf Konverter (Index 0)
+          setState(() {
+            _tab = 0;
+          });
+          // 2. Dem Konverter sagen: Setze diese beiden Währungen ein!
+          _converterKey.currentState?.setCurrencies(from, to);
+        },
+        onAdd: _addFavorite,
+        onDelete: _deleteFavorite,
+        onClear: _clearFavorites,
+      ),
       HistoryScreen(
         language: widget.language,
         items: _historyItems,
@@ -432,14 +597,23 @@ class _MainScreenState extends State<MainScreen> {
       SettingsScreen(
         darkMode: widget.darkMode,
         language: widget.language,
+        homeCurrency: widget.homeCurrency,
+        fontSize: widget.fontSize,
         onDarkModeChanged: widget.onDarkModeChanged,
         onLanguageChanged: widget.onLanguageChanged,
+        onHomeCurrencyChanged: widget.onHomeCurrencyChanged,
+        onFontSizeChanged: widget.onFontSizeChanged,
+        onClearData: _clearAllData,
       ),
     ];
 
     return Scaffold(
       backgroundColor: bgColor(context),
-      body: screens[_tab],
+      // HIER IST DER FIX FÜR DAS GEDAENCHTNIS-PROBLEM: IndexedStack!
+      body: IndexedStack(
+        index: _tab,
+        children: screens,
+      ),
       bottomNavigationBar: _BottomNav(
         current: _tab,
         language: widget.language,
@@ -469,7 +643,7 @@ class _BottomNav extends StatelessWidget {
       (Icons.currency_exchange, tr(language, 'Konverter', 'Converter')),
       (Icons.star_outline, tr(language, 'Favoriten', 'Favorites')),
       (Icons.show_chart, tr(language, 'Verlauf', 'History')),
-      (Icons.settings_outlined, tr(language, 'Settings', 'Settings')),
+      (Icons.settings_outlined, tr(language, 'Einstellungen', 'Settings')),
     ];
 
     return Container(
@@ -517,11 +691,13 @@ class _BottomNav extends StatelessWidget {
 // Konverter
 class ConverterScreen extends StatefulWidget {
   final String language;
+  final String homeCurrency;
   final ValueChanged<ConversionHistoryItem> onCalculationFinished;
 
   const ConverterScreen({
     super.key,
     required this.language,
+    required this.homeCurrency,
     required this.onCalculationFinished,
   });
 
@@ -530,10 +706,9 @@ class ConverterScreen extends StatefulWidget {
 }
 
 class _ConverterScreenState extends State<ConverterScreen> {
-  String _from = 'EUR';
+  late String _from;
   String _to = 'USD';
 
-  // Startwert ist jetzt 0 und nicht mehr 1000
   String _input = '0';
 
   double get _inputValue => double.tryParse(_input) ?? 0;
@@ -543,6 +718,41 @@ class _ConverterScreenState extends State<ConverterScreen> {
   int _requestId = 0;
 
   double get _rate => kRates[_to]! / kRates[_from]!;
+
+  @override
+  void initState() {
+    super.initState();
+    _from = widget.homeCurrency;
+    // Sicherstellen, dass _to != _from
+    if (_to == _from) {
+      _to = _from == 'EUR' ? 'USD' : 'EUR';
+    }
+  }
+
+  @override
+  void didUpdateWidget(ConverterScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Wenn sich die Heimwährung in den Einstellungen ändert,
+    // wird _from im Konverter aktualisiert
+    if (oldWidget.homeCurrency != widget.homeCurrency) {
+      setState(() {
+        _from = widget.homeCurrency;
+        if (_to == _from) {
+          _to = _from == 'EUR' ? 'USD' : 'EUR';
+        }
+      });
+      _rechneMitApi();
+    }
+  }
+
+  // Diese neue Funktion wird von den Favoriten aus aufgerufen!
+  void setCurrencies(String newFrom, String newTo) {
+    setState(() {
+      _from = newFrom;
+      _to = newTo;
+    });
+    _rechneMitApi(); // Direkt neu ausrechnen
+  }
 
   Future<double?> _rechneMitApi() async {
     final amount = _inputValue;
@@ -605,7 +815,6 @@ class _ConverterScreenState extends State<ConverterScreen> {
     );
 
     setState(() {
-      // Nach abgeschlossener Rechnung wieder auf 0 setzen
       _input = '0';
       _resultText = '0.00';
       _apiRate = null;
@@ -1079,10 +1288,20 @@ class _CurrencyPicker extends StatelessWidget {
 // Favoriten
 class FavoritesScreen extends StatefulWidget {
   final String language;
+  final List<(String, String, double, double)> favItems;
+  final void Function(String, String) onFavoriteSelected;
+  final void Function(String, String) onAdd;
+  final void Function(int) onDelete;
+  final VoidCallback onClear;
 
   const FavoritesScreen({
     super.key,
     required this.language,
+    required this.favItems,
+    required this.onFavoriteSelected,
+    required this.onAdd,
+    required this.onDelete,
+    required this.onClear,
   });
 
   @override
@@ -1090,11 +1309,6 @@ class FavoritesScreen extends StatefulWidget {
 }
 
 class _FavoritesScreenState extends State<FavoritesScreen> {
-  final List<(String, String, double, double)> _favs = [
-    ('EUR', 'USD', 1.0850, 0.2),
-    ('GBP', 'EUR', 1.1712, -0.8),
-    ('BTC', 'EUR', 58420.0, 2.1),
-  ];
 
   Future<void> _addFavorite() async {
     String from = 'EUR';
@@ -1191,11 +1405,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     );
 
     if (result != null) {
-      final rate = kRates[result.$2]! / kRates[result.$1]!;
-
-      setState(() {
-        _favs.add((result.$1, result.$2, rate, 0.0));
-      });
+      widget.onAdd(result.$1, result.$2);
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -1207,11 +1417,9 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   }
 
   void _deleteFavorite(int index) {
-    final deleted = _favs[index];
+    final deleted = widget.favItems[index];
 
-    setState(() {
-      _favs.removeAt(index);
-    });
+    widget.onDelete(index);
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -1222,9 +1430,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   }
 
   void _clearFavorites() {
-    setState(() {
-      _favs.clear();
-    });
+    widget.onClear();
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -1237,6 +1443,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   @override
   Widget build(BuildContext context) {
     final green = greenColor(context);
+    final favs = widget.favItems;
 
     return SafeArea(
       child: Padding(
@@ -1244,7 +1451,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const BrandHeader(showNotification: true),
+            const BrandHeader(),
             const SizedBox(height: 18),
 
             Row(
@@ -1259,7 +1466,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                     ),
                   ),
                 ),
-                if (_favs.isNotEmpty)
+                if (favs.isNotEmpty)
                   TextButton.icon(
                     onPressed: _clearFavorites,
                     icon: const Icon(
@@ -1281,7 +1488,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
             const SizedBox(height: 8),
 
             Expanded(
-              child: _favs.isEmpty
+              child: favs.isEmpty
                   ? Center(
                       child: Text(
                         tr(widget.language, 'Keine Favoriten vorhanden', 'No favorites yet'),
@@ -1290,85 +1497,90 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                     )
                   : ListView.builder(
                       physics: const BouncingScrollPhysics(),
-                      itemCount: _favs.length,
+                      itemCount: favs.length,
                       itemBuilder: (_, i) {
-                        final f = _favs[i];
+                        final f = favs[i];
                         final positive = f.$4 >= 0;
 
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: cardColor(context),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: borderColor(context)),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.star,
-                                color: green.withOpacity(0.8),
-                                size: 20,
-                              ),
-                              const SizedBox(width: 12),
+                        return GestureDetector(
+                          onTap: () {
+                            widget.onFavoriteSelected(f.$1, f.$2);
+                          },
+                          child: Container(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: cardColor(context),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: borderColor(context)),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.star,
+                                  color: green.withOpacity(0.8),
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 12),
 
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        '${f.$1} / ${f.$2}',
+                                        style: TextStyle(
+                                          color: textColor(context),
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 15,
+                                        ),
+                                      ),
+                                      Text(
+                                        nameOf(f.$1),
+                                        style: TextStyle(
+                                          color: mutedColor(context),
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
                                   children: [
                                     Text(
-                                      '${f.$1} / ${f.$2}',
+                                      f.$3 > 1000
+                                          ? f.$3.toStringAsFixed(0)
+                                          : f.$3.toStringAsFixed(4),
                                       style: TextStyle(
                                         color: textColor(context),
                                         fontWeight: FontWeight.bold,
-                                        fontSize: 15,
+                                        fontSize: 16,
                                       ),
                                     ),
                                     Text(
-                                      nameOf(f.$1),
+                                      '${positive ? '+' : ''}${f.$4.toStringAsFixed(1)}%',
                                       style: TextStyle(
-                                        color: mutedColor(context),
-                                        fontSize: 11,
+                                        color: positive ? green : AppColors.red,
+                                        fontSize: 12,
                                       ),
                                     ),
                                   ],
                                 ),
-                              ),
 
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Text(
-                                    f.$3 > 1000
-                                        ? f.$3.toStringAsFixed(0)
-                                        : f.$3.toStringAsFixed(4),
-                                    style: TextStyle(
-                                      color: textColor(context),
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 16,
-                                    ),
+                                const SizedBox(width: 10),
+
+                                GestureDetector(
+                                  onTap: () => _deleteFavorite(i),
+                                  child: const Icon(
+                                    Icons.delete_outline,
+                                    color: AppColors.red,
+                                    size: 20,
                                   ),
-                                  Text(
-                                    '${positive ? '+' : ''}${f.$4.toStringAsFixed(1)}%',
-                                    style: TextStyle(
-                                      color: positive ? green : AppColors.red,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ],
-                              ),
-
-                              const SizedBox(width: 10),
-
-                              GestureDetector(
-                                onTap: () => _deleteFavorite(i),
-                                child: const Icon(
-                                  Icons.delete_outline,
-                                  color: AppColors.red,
-                                  size: 20,
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         );
                       },
@@ -1541,7 +1753,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const BrandHeader(showNotification: true),
+            const BrandHeader(),
             const SizedBox(height: 18),
 
             Text(
@@ -1761,15 +1973,25 @@ class _HistoryScreenState extends State<HistoryScreen> {
 class SettingsScreen extends StatefulWidget {
   final bool darkMode;
   final String language;
+  final String homeCurrency;
+  final String fontSize;
   final ValueChanged<bool> onDarkModeChanged;
   final ValueChanged<String> onLanguageChanged;
+  final ValueChanged<String> onHomeCurrencyChanged;
+  final ValueChanged<String> onFontSizeChanged;
+  final VoidCallback onClearData;
 
   const SettingsScreen({
     super.key,
     required this.darkMode,
     required this.language,
+    required this.homeCurrency,
+    required this.fontSize,
     required this.onDarkModeChanged,
     required this.onLanguageChanged,
+    required this.onHomeCurrencyChanged,
+    required this.onFontSizeChanged,
+    required this.onClearData,
   });
 
   @override
@@ -1778,8 +2000,6 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _offlineMode = false;
-  String _homeCurrency = 'EUR';
-  String _fontSize = 'Standard';
   int _cacheSize = 234;
 
   void _showMessage(String message) {
@@ -1828,15 +2048,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
         return _OptionSheet(
           title: tr(widget.language, 'Heimwährung auswählen', 'Choose home currency'),
           options: kRates.keys.toList(),
-          selected: _homeCurrency,
+          selected: widget.homeCurrency,
         );
       },
     );
 
     if (result != null) {
-      setState(() {
-        _homeCurrency = result;
-      });
+      widget.onHomeCurrencyChanged(result);
 
       _showMessage(
         tr(
@@ -1859,15 +2077,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
         return _OptionSheet(
           title: tr(widget.language, 'Schriftgröße auswählen', 'Choose font size'),
           options: const ['Klein', 'Standard', 'Groß'],
-          selected: _fontSize,
+          selected: widget.fontSize,
         );
       },
     );
 
     if (result != null) {
-      setState(() {
-        _fontSize = result;
-      });
+      widget.onFontSizeChanged(result);
 
       _showMessage(
         tr(widget.language, 'Schriftgröße wurde geändert', 'Font size changed'),
@@ -1875,7 +2091,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  void _clearCache() {
+  Future<void> _clearCache() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.clear();
+
+    widget.onClearData();
+
     setState(() {
       _cacheSize = 0;
     });
@@ -1938,7 +2159,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 label: tr(widget.language, 'Heimwährung', 'Home currency'),
                 onTap: _pickHomeCurrency,
                 trailing: Text(
-                  '$_homeCurrency ›',
+                  '${widget.homeCurrency} ›',
                   style: TextStyle(color: mutedColor(context), fontSize: 13),
                 ),
               ),
@@ -1972,7 +2193,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 label: tr(widget.language, 'Schriftgröße', 'Font size'),
                 onTap: _pickFontSize,
                 trailing: Text(
-                  '$_fontSize ›',
+                  '${widget.fontSize} ›',
                   style: TextStyle(color: mutedColor(context), fontSize: 13),
                 ),
               ),
